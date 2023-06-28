@@ -8,16 +8,24 @@ pub enum TokenKind<'a> {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct Span {
+    pub lo_line: usize,
+    pub lo_col: usize,
+    pub hi_line: usize,
+    pub hi_col: usize,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Token<'a> {
     pub kind: TokenKind<'a>,
-    pub line: usize,
-    pub col: usize,
+    pub span: Span,
 }
 
 pub struct TokenStream<'a> {
     src: &'a [u8],
     line: usize,
     col: usize,
+    prev_char_loc: (usize, usize),
 }
 
 fn tostr(x: &[u8]) -> &str {
@@ -29,10 +37,17 @@ impl<'a> TokenStream<'a> {
         self.src.is_empty()
     }
 
+    /// (line, col)
+    fn loc(&self) -> (usize, usize) {
+        (self.line, self.col)
+    }
+
     fn next_char(&mut self) -> Option<u8> {
         if self.src.is_empty() {
             None
         } else {
+            let prev = self.loc();
+
             let ch = self.src[0];
             if ch == b'\n' {
                 self.col = 1;
@@ -41,6 +56,7 @@ impl<'a> TokenStream<'a> {
                 self.col += 1;
             }
             self.src = &self.src[1..];
+            self.prev_char_loc = prev;
             Some(ch)
         }
     }
@@ -78,13 +94,27 @@ impl<'a> TokenStream<'a> {
         self.eat_while(|x| x == b' ' || x == b'\t' || x == b'\n');
     }
 
-    fn make_token(&self, kind: TokenKind<'a>, line: usize, col: usize) -> Token<'a> {
-        Token { kind, line, col }
+    /// Makes a token with the given kind, and a span ranging from `(lo_line, lo_col)` to one char before the current loc
+    fn make_token_with_lo(
+        &self,
+        kind: TokenKind<'a>,
+        (lo_line, lo_col): (usize, usize),
+    ) -> Token<'a> {
+        let (hi_line, hi_col) = self.prev_char_loc;
+
+        Token {
+            kind,
+            span: Span {
+                lo_line,
+                lo_col,
+                hi_line,
+                hi_col,
+            },
+        }
     }
 
     fn lex_ident_or_keyword(&mut self) -> Option<Token<'a>> {
-        let line = self.line;
-        let col = self.col;
+        let lo = self.loc();
         if let Some(ch) = self.peek_char() {
             if !(ch.is_ascii_alphabetic() || ch == b'_') {
                 return None;
@@ -99,34 +129,32 @@ impl<'a> TokenStream<'a> {
 
             for (s, t) in keywords {
                 if s == id {
-                    return Some(self.make_token(t, line, col));
+                    return Some(self.make_token_with_lo(t, lo));
                 }
             }
 
-            Some(self.make_token(TokenKind::Ident(tostr(id)), line, col))
+            Some(self.make_token_with_lo(TokenKind::Ident(tostr(id)), lo))
         }
     }
 
     fn lex_operator(&mut self) -> Option<Token<'a>> {
         let ops = [(b"=", TokenKind::Equals), (b"+", TokenKind::Plus)];
-        let line = self.line;
-        let col = self.col;
+        let lo = self.loc();
         for (s, t) in ops {
             if self.eat_str(s) {
-                return Some(self.make_token(t, line, col));
+                return Some(self.make_token_with_lo(t, lo));
             }
         }
         None
     }
 
     fn lex_numlit(&mut self) -> Option<Token<'a>> {
-        let line = self.line;
-        let col = self.col;
+        let lo = self.loc();
         let it = self.eat_while(|x| x.is_ascii_digit());
         if it.is_empty() {
             None
         } else {
-            Some(self.make_token(TokenKind::NumLit(tostr(it)), line, col))
+            Some(self.make_token_with_lo(TokenKind::NumLit(tostr(it)), lo))
         }
     }
 }
@@ -166,6 +194,7 @@ pub fn tokenize(src: &str) -> TokenStream {
         src: src.as_bytes(),
         line: 1,
         col: 1,
+        prev_char_loc: (0, 0),
     }
 }
 
@@ -190,8 +219,12 @@ mod tests {
             t,
             Ok(Token {
                 kind: TokenKind::Ident("lettuce"),
-                line: 1,
-                col: 1,
+                span: Span {
+                    lo_line: 1,
+                    hi_line: 1,
+                    lo_col: 1,
+                    hi_col: 7
+                }
             })
         );
 
@@ -201,8 +234,12 @@ mod tests {
             t,
             Ok(Token {
                 kind: TokenKind::Let,
-                line: 1,
-                col: 1,
+                span: Span {
+                    lo_line: 1,
+                    hi_line: 1,
+                    lo_col: 1,
+                    hi_col: 3,
+                }
             })
         );
     }
@@ -220,23 +257,39 @@ mod tests {
             vec![
                 Token {
                     kind: Let,
-                    line: 1,
-                    col: 1
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 1,
+                        hi_col: 3,
+                    }
                 },
                 Token {
                     kind: Ident("foo123"),
-                    line: 1,
-                    col: 5
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 5,
+                        hi_col: 10,
+                    }
                 },
                 Token {
                     kind: Equals,
-                    line: 1,
-                    col: 12
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 12,
+                        hi_col: 12,
+                    }
                 },
                 Token {
                     kind: NumLit("123"),
-                    line: 1,
-                    col: 14
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 14,
+                        hi_col: 16,
+                    }
                 }
             ]
         );
@@ -249,43 +302,75 @@ mod tests {
             tokens,
             vec![
                 Token {
-                    line: 1,
-                    col: 1,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 1,
+                        hi_col: 3,
+                    },
                     kind: Let
                 },
                 Token {
-                    line: 1,
-                    col: 5,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 5,
+                        hi_col: 11,
+                    },
                     kind: Ident("add_two")
                 },
                 Token {
-                    line: 1,
-                    col: 13,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 13,
+                        hi_col: 13,
+                    },
                     kind: Ident("a")
                 },
                 Token {
-                    line: 1,
-                    col: 15,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 15,
+                        hi_col: 15,
+                    },
                     kind: Ident("b")
                 },
                 Token {
-                    line: 1,
-                    col: 17,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 17,
+                        hi_col: 17,
+                    },
                     kind: Equals
                 },
                 Token {
-                    line: 1,
-                    col: 19,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 19,
+                        hi_col: 19,
+                    },
                     kind: Ident("a")
                 },
                 Token {
-                    line: 1,
-                    col: 21,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 21,
+                        hi_col: 21,
+                    },
                     kind: Plus
                 },
                 Token {
-                    line: 1,
-                    col: 23,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 23,
+                        hi_col: 23,
+                    },
                     kind: Ident("b")
                 }
             ]
@@ -299,38 +384,66 @@ mod tests {
             tokens,
             vec![
                 Token {
-                    line: 1,
-                    col: 1,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 1,
+                        hi_col: 3,
+                    },
                     kind: Let
                 },
                 Token {
-                    line: 1,
-                    col: 5,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 5,
+                        hi_col: 7,
+                    },
                     kind: Ident("foo")
                 },
                 Token {
-                    line: 1,
-                    col: 9,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 9,
+                        hi_col: 13,
+                    },
                     kind: Ident("thing")
                 },
                 Token {
-                    line: 1,
-                    col: 15,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 15,
+                        hi_col: 15,
+                    },
                     kind: Equals
                 },
                 Token {
-                    line: 1,
-                    col: 17,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 17,
+                        hi_col: 20,
+                    },
                     kind: NumLit("1928")
                 },
                 Token {
-                    line: 1,
-                    col: 22,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 22,
+                        hi_col: 22,
+                    },
                     kind: Plus
                 },
                 Token {
-                    line: 1,
-                    col: 24,
+                    span: Span {
+                        lo_line: 1,
+                        hi_line: 1,
+                        lo_col: 24,
+                        hi_col: 28,
+                    },
                     kind: Ident("thing")
                 }
             ]
