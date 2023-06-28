@@ -85,7 +85,12 @@ impl<'a> TokenStream<'a> {
     fn lex_ident_or_keyword(&mut self) -> Option<Token<'a>> {
         let line = self.line;
         let col = self.col;
-        let id = self.eat_while(|x| x.is_ascii_alphabetic() || x == b'_');
+        if let Some(ch) = self.peek_char() {
+            if !(ch.is_ascii_alphabetic() || ch == b'_') {
+                return None;
+            }
+        }
+        let id = self.eat_while(|x| x.is_ascii_alphanumeric() || x == b'_');
 
         if id.is_empty() {
             None
@@ -205,6 +210,36 @@ mod tests {
     #[test]
     fn test_lex_stuff() {
         use TokenKind::*;
+
+        let tokens = tokenize("let foo123 = 123")
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            tokens,
+            vec![
+                Token {
+                    kind: Let,
+                    line: 1,
+                    col: 1
+                },
+                Token {
+                    kind: Ident("foo123"),
+                    line: 1,
+                    col: 5
+                },
+                Token {
+                    kind: Equals,
+                    line: 1,
+                    col: 12
+                },
+                Token {
+                    kind: NumLit("123"),
+                    line: 1,
+                    col: 14
+                }
+            ]
+        );
 
         let tokens = tokenize("let add_two a b = a + b")
             .map(|x| x.unwrap())
