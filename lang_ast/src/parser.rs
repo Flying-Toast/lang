@@ -1,4 +1,4 @@
-use crate::expr::*;
+use crate::*;
 use lang_token::{Token, TokenKind as TK, TokenStream};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -14,8 +14,15 @@ impl<'a> From<lang_token::LexError<'a>> for ParseError<'a> {
     }
 }
 
-pub fn parse(ts: TokenStream) -> Result<Expr, ParseError> {
-    Parser { ts: ts.peekable() }.parse_expr()
+pub fn parse(ts: TokenStream) -> Result<Vec<LetBind>, ParseError> {
+    let mut p = Parser { ts: ts.peekable() };
+    let mut ret = Vec::new();
+
+    while let Some(b) = p.maybe_parse_let_bind()? {
+        ret.push(b);
+    }
+
+    Ok(ret)
 }
 
 struct Parser<'a> {
@@ -25,6 +32,14 @@ struct Parser<'a> {
 impl<'a> Parser<'a> {
     fn expect_next_token(&mut self) -> Result<Token<'a>, ParseError<'a>> {
         Ok(self.ts.next().ok_or(ParseError::UnexpectedEof)??)
+    }
+
+    fn maybe_next_token(&mut self) -> Result<Option<Token<'a>>, ParseError<'a>> {
+        if self.peek_token()?.is_none() {
+            Ok(None)
+        } else {
+            Ok(Some(self.expect_next_token().unwrap()))
+        }
     }
 
     fn peek_token(&mut self) -> Result<Option<Token<'a>>, ParseError<'a>> {
@@ -72,6 +87,38 @@ impl<'a> Parser<'a> {
             }
         }
     }
+
+    fn maybe_parse_let_bind(&mut self) -> Result<Option<LetBind<'a>>, ParseError<'a>> {
+        let lettok = self.maybe_next_token()?;
+        let lettok = match lettok {
+            None => return Ok(None),
+            Some(x) => x,
+        };
+
+        if let TK::Let = lettok.kind {
+            let bindidenttok = self.expect_next_token()?;
+
+            let ident = match bindidenttok.kind {
+                TK::Ident(id) => id,
+                _ => return Err(ParseError::UnexpectedToken(bindidenttok)),
+            };
+
+            let eqtok = self.expect_next_token()?;
+            match eqtok.kind {
+                TK::Equals => {}
+                _ => return Err(ParseError::UnexpectedToken(eqtok)),
+            };
+
+            let value = self.parse_expr()?;
+
+            Ok(Some(LetBind {
+                ident: Ident { ident },
+                value,
+            }))
+        } else {
+            Err(ParseError::UnexpectedToken(lettok))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -85,13 +132,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn parser_test() {
-        assert_eq!(
-            parser("12").parse_expr(),
-            Ok(IntLit(IntLitExpr { value: 12 }))
-        );
+    fn parsed(x: &str) -> Result<Vec<LetBind>, ParseError> {
+        parse(lang_token::tokenize(x))
+    }
 
+    #[test]
+    fn test_precidence() {
         assert_eq!(
             parser("abc123def + foo + 123 + bar + baz").parse_expr(),
             Ok(Add(
@@ -110,6 +156,44 @@ mod tests {
                 .into(),
                 BindRef(Ident { ident: "baz" }).into()
             ))
+        );
+    }
+
+    #[test]
+    fn test_parse_let_binding() {
+        assert_eq!(
+            parsed("let foo = 12 + bar"),
+            Ok(vec![LetBind {
+                ident: Ident { ident: "foo" },
+                value: Expr::Add(
+                    Expr::IntLit(IntLitExpr { value: 12 }).into(),
+                    Expr::BindRef(Ident { ident: "bar" }).into()
+                )
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_multiple_let_bindings() {
+        assert_eq!(
+            parsed("let a = foo + bar\nlet other = hello let six=6"),
+            Ok(vec![
+                LetBind {
+                    ident: Ident { ident: "a" },
+                    value: Expr::Add(
+                        Expr::BindRef(Ident { ident: "foo" }).into(),
+                        Expr::BindRef(Ident { ident: "bar" }).into()
+                    )
+                },
+                LetBind {
+                    ident: Ident { ident: "other" },
+                    value: Expr::BindRef(Ident { ident: "hello" })
+                },
+                LetBind {
+                    ident: Ident { ident: "six" },
+                    value: Expr::IntLit(IntLitExpr { value: 6 })
+                },
+            ])
         );
     }
 }
