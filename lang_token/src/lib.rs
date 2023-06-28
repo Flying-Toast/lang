@@ -4,6 +4,7 @@ pub enum Token<'a> {
     Ident(&'a str),
     Equals,
     Plus,
+    NumLit(&'a str),
 }
 
 pub struct TokenStream<'a> {
@@ -70,10 +71,7 @@ impl<'a> TokenStream<'a> {
     }
 
     fn lex_operator(&mut self) -> Option<Token<'a>> {
-        let ops = [
-            (b"=", Token::Equals),
-            (b"+", Token::Plus),
-        ];
+        let ops = [(b"=", Token::Equals), (b"+", Token::Plus)];
         for (s, t) in ops {
             if self.src.starts_with(s) {
                 self.src = &self.src[s.len()..];
@@ -81,6 +79,15 @@ impl<'a> TokenStream<'a> {
             }
         }
         None
+    }
+
+    fn lex_numlit(&mut self) -> Option<Token<'a>> {
+        let it = self.eat_while(|x| x.is_ascii_digit());
+        if it.is_empty() {
+            None
+        } else {
+            Some(Token::NumLit(tostr(it)))
+        }
     }
 }
 
@@ -94,7 +101,11 @@ impl<'a> Iterator for TokenStream<'a> {
             return None;
         }
 
-        let lexers = [Self::lex_ident_or_keyword,Self::lex_operator];
+        let lexers = [
+            Self::lex_ident_or_keyword,
+            Self::lex_operator,
+            Self::lex_numlit,
+        ];
         for l in lexers {
             if let Some(tok) = l(self) {
                 return Some(Ok(tok));
@@ -144,8 +155,9 @@ mod tests {
     fn test_lex_stuff() {
         use Token::*;
 
-        let ts = tokenize("let add_two a b = a + b");
-        let tokens = ts.map(|x| x.unwrap()).collect::<Vec<_>>();
+        let tokens = tokenize("let add_two a b = a + b")
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
 
         assert_eq!(
             tokens,
@@ -158,6 +170,23 @@ mod tests {
                 Ident("a"),
                 Plus,
                 Ident("b")
+            ]
+        );
+
+        let tokens = tokenize("let foo thing = 1928 + thing")
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            tokens,
+            vec![
+                Let,
+                Ident("foo"),
+                Ident("thing"),
+                Equals,
+                NumLit("1928"),
+                Plus,
+                Ident("thing")
             ]
         );
     }
