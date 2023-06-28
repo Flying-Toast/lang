@@ -3,10 +3,26 @@
 version = 3
 
 [[package]]
+name = "exe"
+version = "0.1.0"
+dependencies = [
+ "lang_ast",
+ "lang_interpreter",
+ "lang_token",
+]
+
+[[package]]
 name = "lang_ast"
 version = "0.1.0"
 dependencies = [
  "lang_token",
+]
+
+[[package]]
+name = "lang_interpreter"
+version = "0.1.0"
+dependencies = [
+ "lang_ast",
 ]
 
 [[package]]

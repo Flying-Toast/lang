@@ -57,7 +57,7 @@ impl<'a> Parser<'a> {
             TK::NumLit(numstring) => Expr::IntLit(IntLitExpr {
                 value: numstring.parse().unwrap(),
             }),
-            TK::Ident(id) => Expr::BindRef(Ident { ident: id }),
+            TK::Ident(id) => Expr::BindRef(Ident { name: id }),
             _ => return Err(ParseError::UnexpectedToken(next)),
         })
     }
@@ -112,7 +112,7 @@ impl<'a> Parser<'a> {
             let value = self.parse_expr()?;
 
             Ok(Some(LetBind {
-                ident: Ident { ident },
+                ident: Ident { name: ident },
                 value,
             }))
         } else {
@@ -144,17 +144,17 @@ mod tests {
                 Add(
                     Add(
                         Add(
-                            BindRef(Ident { ident: "abc123def" }).into(),
-                            BindRef(Ident { ident: "foo" }).into()
+                            BindRef(Ident { name: "abc123def" }).into(),
+                            BindRef(Ident { name: "foo" }).into()
                         )
                         .into(),
                         IntLit(IntLitExpr { value: 123 }).into()
                     )
                     .into(),
-                    BindRef(Ident { ident: "bar" }).into()
+                    BindRef(Ident { name: "bar" }).into()
                 )
                 .into(),
-                BindRef(Ident { ident: "baz" }).into()
+                BindRef(Ident { name: "baz" }).into()
             ))
         );
     }
@@ -164,10 +164,10 @@ mod tests {
         assert_eq!(
             parsed("let foo = 12 + bar"),
             Ok(vec![LetBind {
-                ident: Ident { ident: "foo" },
+                ident: Ident { name: "foo" },
                 value: Expr::Add(
                     Expr::IntLit(IntLitExpr { value: 12 }).into(),
-                    Expr::BindRef(Ident { ident: "bar" }).into()
+                    Expr::BindRef(Ident { name: "bar" }).into()
                 )
             }])
         );
@@ -179,18 +179,18 @@ mod tests {
             parsed("let a = foo + bar\nlet other = hello let six=6"),
             Ok(vec![
                 LetBind {
-                    ident: Ident { ident: "a" },
+                    ident: Ident { name: "a" },
                     value: Expr::Add(
-                        Expr::BindRef(Ident { ident: "foo" }).into(),
-                        Expr::BindRef(Ident { ident: "bar" }).into()
+                        Expr::BindRef(Ident { name: "foo" }).into(),
+                        Expr::BindRef(Ident { name: "bar" }).into()
                     )
                 },
                 LetBind {
-                    ident: Ident { ident: "other" },
-                    value: Expr::BindRef(Ident { ident: "hello" })
+                    ident: Ident { name: "other" },
+                    value: Expr::BindRef(Ident { name: "hello" })
                 },
                 LetBind {
-                    ident: Ident { ident: "six" },
+                    ident: Ident { name: "six" },
                     value: Expr::IntLit(IntLitExpr { value: 6 })
                 },
             ])

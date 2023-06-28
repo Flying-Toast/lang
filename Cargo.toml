@@ -2,4 +2,6 @@
 members = [
 	"lang_token",
 	"lang_ast",
+	"lang_interpreter",
+	"exe",
 ]

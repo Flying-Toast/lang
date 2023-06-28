@@ -13,5 +13,5 @@ pub struct IntLitExpr {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Ident<'a> {
-    pub ident: &'a str,
+    pub name: &'a str,
 }

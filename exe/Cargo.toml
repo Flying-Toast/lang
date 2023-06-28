@@ -1,0 +1,9 @@
+[package]
+name = "exe"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lang_token = { path = "../lang_token" }
+lang_ast = { path = "../lang_ast" }
+lang_interpreter = { path = "../lang_interpreter" }
