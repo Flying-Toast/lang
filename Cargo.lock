@@ -3,5 +3,12 @@
 version = 3
 
 [[package]]
+name = "lang_ast"
+version = "0.1.0"
+dependencies = [
+ "lang_token",
+]
+
+[[package]]
 name = "lang_token"
 version = "0.1.0"

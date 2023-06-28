@@ -1,10 +1,10 @@
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum TokenKind<'a> {
     Let,
-    Ident(&'a str),
     Equals,
     Plus,
     NumLit(&'a str),
+    Ident(&'a str),
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
